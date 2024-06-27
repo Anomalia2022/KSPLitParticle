@@ -12,11 +12,25 @@ namespace KSPLitParticle
         // Load selected assets from assetbundles
         public void Awake()
         {
+            ReloadAsset();
+        }
+
+        public void FixedUpdate()
+        {
+            if(Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.P))
+            {
+                Destroy(particlesPrefab);
+                ReloadAsset();
+            }
+        }
+
+        public void ReloadAsset()
+        {
             DontDestroyOnLoad(this);
 
             // Find all LITPARTICLE confignodes
             UrlDir.UrlConfig[] configs = GameDatabase.Instance.GetConfigs("LITPARTICLE");
-            
+
             // Parse all config nodes and load assetbundles if they exist
             foreach (UrlDir.UrlConfig config in configs)
             {
@@ -25,26 +39,26 @@ namespace KSPLitParticle
                 {
                     Debug.Log("[LITPARTICLES] DEBUG TEST LOOP: " + value);
                 }
-                
+
                 string path = config.config.GetValue("path");
-                
+
                 if (string.IsNullOrEmpty(path))
                 {
                     Debug.Log($"[LITPARTICLES] AssetBundle path is null");
                     return;
                 }
-                
+
                 using (WWW www = new WWW($"file://{KSPUtil.ApplicationRootPath}GameData/{path}"))
                 {
                     if (!string.IsNullOrEmpty(www.error) || !File.Exists($"{KSPUtil.ApplicationRootPath}GameData/{path}"))
                     {
-                        Debug.Log($"[LITPARTICLES] AssetBundle not found at path: GameData/{path}");   
+                        Debug.Log($"[LITPARTICLES] AssetBundle not found at path: GameData/{path}");
                         return;
                     }
-                    
+
                     Debug.Log($"[LITPARTICLES] AssetBundle at path GameData/{path} has begun loading!");
                     AssetBundle bundle = www.assetBundle;
-                    
+
                     foreach (var asset in bundle.LoadAllAssets())
                     {
                         if (asset is GameObject)
@@ -62,11 +76,8 @@ namespace KSPLitParticle
                     }
 
                     bundle.Unload(false);
-                    //www.Dispose();
-
-                    this.enabled = false;
                 }
-                
+
             }
         }
     }
