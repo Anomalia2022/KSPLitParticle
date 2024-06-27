@@ -1,21 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using KSP.IO;
-using UniLinq;
+﻿using UniLinq;
 using UnityEngine;
-using Enumerable = System.Linq.Enumerable;
 using File = System.IO.File;
-using Object = System.Object;
 
 namespace KSPLitParticle
 {
     [KSPAddon(KSPAddon.Startup.Instantly, true)]
     public class AssetLoader : MonoBehaviour
     {
+        static public GameObject particlesPrefab;
 
         // Load selected assets from assetbundles
         public void Awake()
         {
+            DontDestroyOnLoad(this);
+
             // Find all LITPARTICLE confignodes
             UrlDir.UrlConfig[] configs = GameDatabase.Instance.GetConfigs("LITPARTICLE");
             
@@ -46,11 +44,7 @@ namespace KSPLitParticle
                     
                     Debug.Log($"[LITPARTICLES] AssetBundle at path GameData/{path} has begun loading!");
                     AssetBundle bundle = www.assetBundle;
-
-                    // Parent of all particle prefabs aka the ParticleDatabase
-                    GameObject database = new GameObject("ParticleDatabase");
                     
-                    DontDestroyOnLoad(database);
                     foreach (var asset in bundle.LoadAllAssets())
                     {
                         if (asset is GameObject)
@@ -59,47 +53,21 @@ namespace KSPLitParticle
                             {
                                 if (((GameObject)asset).name == prefab)
                                 {
+                                    ((GameObject)asset).transform.SetParent(GameDatabase.Instance.transform);
+                                    particlesPrefab = (GameObject)asset;
                                     ((GameObject)asset).SetActive(false);
-                                    DontDestroyOnLoad(asset);
-                                    ((GameObject)asset).transform.SetParent(database.transform);
                                 }
                             });
                         }
                     }
-                    
+
                     bundle.Unload(false);
-                    www.Dispose();
+                    //www.Dispose();
+
+                    this.enabled = false;
                 }
                 
             }
-                
-
-            /*using (WWW www = new WWW("file://" + KSPUtil.ApplicationRootPath + $"GameData/{path}"))
-            {
-                if (!string.IsNullOrEmpty(www.error))
-                {
-                    Debug.Log($"[KSPLitParticles] {path} assetbundle not found!");
-                    return;
-                }
-
-                Debug.Log($"[KSPLitParticles] In the WWW!");
-                AssetBundle bundle = www.assetBundle;
-
-                bundle.LoadAllAssets<Material>();
-                bundle.LoadAllAssets<GameObject>();
-                foreach (GameObject asset in bundle.LoadAllAssets<GameObject>())
-                {
-                    Debug.Log($"[KSPLitParticles] GameObject found by name: {asset.name}");
-                }
-
-                foreach (string asset in bundle.GetAllAssetNames())
-                {
-                    Debug.Log($"[KSPLitParticles] AssetName found with name: {asset}");
-                }
-
-                bundle.Unload(false);
-                www.Dispose();
-            }*/
         }
     }
 }
