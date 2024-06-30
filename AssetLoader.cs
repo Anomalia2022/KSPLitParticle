@@ -1,4 +1,5 @@
-﻿using UniLinq;
+﻿using System.Collections.Generic;
+using UniLinq;
 using UnityEngine;
 using File = System.IO.File;
 
@@ -7,11 +8,12 @@ namespace KSPLitParticle
     [KSPAddon(KSPAddon.Startup.Instantly, true)]
     public class AssetLoader : MonoBehaviour
     {
-        static public GameObject particlesPrefab;
+        static public Dictionary<string, GameObject> particlesPrefab = new Dictionary<string, GameObject>();
 
         // Load selected assets from assetbundles
         public void Awake()
         {
+            // Load the assets
             ReloadAsset();
         }
 
@@ -19,7 +21,15 @@ namespace KSPLitParticle
         {
             if(Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.P))
             {
-                Destroy(particlesPrefab);
+                // Destroy all old prefabs
+                particlesPrefab.Values.ToList().ForEach(p => { 
+                    Destroy(p);
+                });
+                
+                // Reinstantiate the list
+                particlesPrefab = new Dictionary<string, GameObject>();
+
+                // Reload the Assets
                 ReloadAsset();
             }
         }
@@ -50,6 +60,8 @@ namespace KSPLitParticle
 
                 using (WWW www = new WWW($"file://{KSPUtil.ApplicationRootPath}GameData/{path}"))
                 {
+
+                    // Fix the file call after looking for the file dumbass
                     if (!string.IsNullOrEmpty(www.error) || !File.Exists($"{KSPUtil.ApplicationRootPath}GameData/{path}"))
                     {
                         Debug.Log($"[LITPARTICLES] AssetBundle not found at path: GameData/{path}");
@@ -67,9 +79,14 @@ namespace KSPLitParticle
                             {
                                 if (((GameObject)asset).name == prefab)
                                 {
-                                    ((GameObject)asset).transform.SetParent(GameDatabase.Instance.transform);
-                                    particlesPrefab = (GameObject)asset;
-                                    ((GameObject)asset).SetActive(false);
+                                    GameObject loadedAsset = (GameObject)asset;
+
+                                    loadedAsset.transform.SetParent(GameDatabase.Instance.transform);
+
+                                    loadedAsset.SetActive(false);
+
+                                    particlesPrefab.Add(loadedAsset.name, loadedAsset);
+
                                 }
                             });
                         }
@@ -79,6 +96,12 @@ namespace KSPLitParticle
                 }
 
             }
+
+            Debug.Log("[KSPLitParticles] All Loaded Assets:");
+            particlesPrefab.Keys.ToList().ForEach(key =>
+            {
+                Debug.Log($"Key value {key} found associated with prefab {particlesPrefab[key].name}");
+            });
         }
     }
 }

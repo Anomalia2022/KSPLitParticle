@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Debug = UnityEngine.Debug;
 
 namespace KSPLitParticle
@@ -16,13 +17,21 @@ namespace KSPLitParticle
 
         [KSPField] public string prefabName;
 
+        [KSPField] public float hitRange = 9;
+
+        [KSPField] public int renderQueue = 3500;
+
+        [KSPField] public float maxSolarFlux = 1400; // Roughly the max seen on stock kerbin 20km up
+
+        [KSPField] public float maxEnginePerformance; // How much kN of thrust is required for a deluge plume to reach full volume, if a weaker engine or less engines is fired the plume generated should also reflect this
+
         List<Transform> replaceTransforms;
 
         [KSPField] public Vector3 rotationOffset;
 
         List<ParticleSystem> emitters = new List<ParticleSystem>();
 
-        GameObject replacePrefab;
+        List<GameObject> replacedPrefabs = new List<GameObject>();
 
         private bool enableDelugeModule = true;
 
@@ -59,16 +68,22 @@ namespace KSPLitParticle
 
         public void Start()
         {
+
+            
             if(HighLogic.LoadedSceneIsFlight && HighLogic.LoadedScene == GameScenes.FLIGHT)
             {
-
                 // Change to recursive list to take into effect multiple transform names
                 replaceTransforms = part.FindModelTransforms(transformName).ToList();
-                if (replaceTransforms == null) { enableDelugeModule = false; return; }
+                if (replaceTransforms == null) { enableDelugeModule = false; }
 
                 replaceTransforms.ForEach(transform =>
                 {
-                    replacePrefab = GameObject.Instantiate(AssetLoader.particlesPrefab);
+                    if(!AssetLoader.particlesPrefab.ContainsKey(prefabName))
+                    {
+                        enableDelugeModule = false; return;
+                    }
+
+                    GameObject replacePrefab = GameObject.Instantiate(AssetLoader.particlesPrefab[prefabName]);
 
                     replacePrefab.SetActive(true);
 
@@ -84,12 +99,13 @@ namespace KSPLitParticle
                     Debug.Log("Attempting to set renderQueue");
                     replacePrefab.GetComponentsInChildren<ParticleSystemRenderer>().ToList().ForEach(renderer =>
                     {
-                        renderer.material.renderQueue = 4000;
+                        renderer.material.renderQueue = renderQueue;
                     });
 
                     replacePrefab.transform.position = transform.transform.position;
                     replacePrefab.transform.rotation = Quaternion.Euler(transform.rotation.eulerAngles + rotationOffset);
                     replacePrefab.transform.parent = transform.parent;
+                    replacedPrefabs.Add(replacePrefab);
                 });
 
             } 
@@ -169,6 +185,36 @@ namespace KSPLitParticle
                 });
             }
 
+
+            List<ModuleSurfaceFX> engineSurfaceFX = new List<ModuleSurfaceFX>();
+            Vector3 delugeLocation = part.transform.position;
+
+            // Find ModuleSurfaceFX of all actively running engines on all nearby engines and check if they make contact with the plate
+            FlightGlobals.VesselsLoaded.ForEach(v =>
+            {
+                // All engines that are ingited and above 0 throttle whether it be the active vessel, kOS, or Independent Throttle
+                v.FindPartModulesImplementing<ModuleEngines>().Where(e => e.getIgnitionState == true && e.currentThrottle > 0).ToList().ForEach(activeEngine =>
+                {
+                    if(activeEngine.part.GetComponentsInChildren<ModuleSurfaceFX>().Where(fx => Vector3.Distance(delugeLocation, fx.point) <= hitRange && fx.hit != ModuleSurfaceFX.SurfaceType.None) != null)
+                    {
+                        engineSurfaceFX.Add(activeEngine.part.GetComponentsInChildren<ModuleSurfaceFX>().Where(fx => Vector3.Distance(delugeLocation, fx.point) <= hitRange && fx.hit != ModuleSurfaceFX.SurfaceType.None).First());
+                    }
+                    // If the active engine's ModuleSurfaceFX hit point is within X meters and is hitting the surface not blasting the pad above/left behind point when out of range it will add to the list of engineSurfaceFX
+                });
+
+            });
+
+            // ----- DETECT ENGINE POWER LATER -----
+            // Found engines actively hitting deluge system
+            if(engineSurfaceFX.Any())
+            {
+                emitters.ForEach(e =>
+                {
+                    e.enableEmission = true;
+                });
+            }
+
+
             if (delugeActive != IsDelugeActive)
             {
                 EnableDeluge();
@@ -177,7 +223,14 @@ namespace KSPLitParticle
 
         public void OnDestroy()
         {
-            Destroy(replacePrefab);
+            // Destroy any prefab to ensure a safe closure on scene destruction
+            replacedPrefabs.ForEach(prefab =>
+            {
+                Destroy(prefab);
+            });
+
+            // Reinstantiate the empty list
+            replacedPrefabs = new List<GameObject>();
         }
     }
 }
